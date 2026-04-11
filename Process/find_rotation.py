@@ -45,5 +45,5 @@ def find_rotation(img):
 
         cv2.imshow("Detected Lines", display_img)
 
-    print(f"Lines found: {line_count}")
+    print(f"Lines found: {line_count}.   Angle {angle}")
     return angle

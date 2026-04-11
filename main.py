@@ -4,8 +4,11 @@ import argparse
 import sys
 from Process.pre_proc_image import pre_process_image
 from Process.find_rotation import find_rotation
+from Process.find_rotation_by_BB import find_rotation_by_BB
 from Process.find_piece_center import find_piece_center
 from Process.find_corners import find_corners
+
+ROTATE_AROUND_BB = True
 
 def main():
     parser = argparse.ArgumentParser(description="Piece Project CLI")
@@ -28,12 +31,15 @@ def main():
         pre_processed_image = pre_process_image(resized_image)
         cv2.imshow("Pre-processed image", pre_processed_image)
 
-        rotation_angle = find_rotation(pre_processed_image)
-        print(f"Rotation angle: {rotation_angle}")
-
         # get center of mass of piece
         center_x, center_y = find_piece_center(pre_processed_image)
-        print(f"Center of mass: ({center_x}, {center_y})")
+
+        if ROTATE_AROUND_BB:
+            rotation_angle, center_x, center_y = find_rotation_by_BB(pre_processed_image, center_x, center_y)
+        else:
+            rotation_angle = find_rotation(pre_processed_image)
+
+        print(f"Rotation angle: {rotation_angle}  center of rotation: ({center_x}, {center_y})")
         
         # rotate the image around the point center_x, center_y by the rotation angle
         rotation_matrix = cv2.getRotationMatrix2D((center_x, center_y), rotation_angle, 1.0)
