@@ -7,6 +7,10 @@ def find_corners(img):
     # goodFeaturesToTrack is more robust for finding a specific number of corners
     candidates = cv2.goodFeaturesToTrack(img, maxCorners=10, qualityLevel=0.01, minDistance=50, useHarrisDetector=True)
     
+    pts = [tuple(p.ravel()) for p in candidates]
+    for c in pts:
+        print(f"Candidate corner point ",{c})
+
     # Create a copy of the image to mark the corners (convert to BGR for color drawing)
     marked_img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
     

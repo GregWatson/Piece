@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+from Process.order_lines import order_lines
 
 # Find rotation by rotating the image from -45 to +45 degress and using the
 # rotation with the minimum Bounding Box area.
@@ -17,8 +18,13 @@ def find_rotation_by_BB(img, cx, cy):
 
     # Find a set of lines for the outline using Hough Transform (Probabilistic)
     lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=15, minLineLength=20 , maxLineGap=10)
+    o_lines = order_lines(lines)
+
+    # Find corners from o_lines.
+
 
     line_count = 0
+    min_angle = 0
     
     if lines is not None:
         line_count = len(lines)
@@ -55,15 +61,13 @@ def find_rotation_by_BB(img, cx, cy):
         # See if we have any LONG lines that are EDGES.
         len_threshold = (bb_xlength + bb_ylength) * 0.2
         line_max_length = 0
-        line_max_points = None
-        min_angle = 0
         for line in lines:
             x1, y1, x2, y2 = line[0]
+            # print(f"Line segment is {x1},{y1} - {x2},{y2}")
             length = np.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
             if length > len_threshold:
                 if length > line_max_length:
                     line_max_length = length
-                    line_max_points = (x1, y1, x2, y2)
                     # get angle
                     min_angle = np.degrees(np.arctan2(y2 - y1, x2 - x1))
                     print(f"Longer line found: ({x1}, {y1}) to ({x2}, {y2}) with length {length}   (thresh: {len_threshold})  angle {min_angle}")
@@ -112,4 +116,4 @@ def find_rotation_by_BB(img, cx, cy):
         cv2.imshow("Detected Lines", display_img)
 
     print(f"Lines found: {line_count}.   Angle {min_angle}")
-    return min_angle, cx, cy
+    return min_angle, cx, cy, lines

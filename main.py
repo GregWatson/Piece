@@ -8,8 +8,6 @@ from Process.find_rotation_by_BB import find_rotation_by_BB
 from Process.find_piece_center import find_piece_center
 from Process.find_corners import find_corners
 
-ROTATE_AROUND_BB = True
-
 def main():
     parser = argparse.ArgumentParser(description="Piece Project CLI")
     parser.add_argument("-p", "--picture", help="Path to an image file to display", type=str)
@@ -34,10 +32,7 @@ def main():
         # get center of mass of piece
         center_x, center_y = find_piece_center(pre_processed_image)
 
-        if ROTATE_AROUND_BB:
-            rotation_angle, center_x, center_y = find_rotation_by_BB(pre_processed_image, center_x, center_y)
-        else:
-            rotation_angle = find_rotation(pre_processed_image)
+        rotation_angle, center_x, center_y, lines = find_rotation_by_BB(pre_processed_image, center_x, center_y)
 
         print(f"Rotation angle: {rotation_angle}  center of rotation: ({center_x}, {center_y})")
         
@@ -51,7 +46,7 @@ def main():
         # Find the corners of the piece
         corners = find_corners(rotated_image)
         cv2.imshow("Corners", corners)
-        print(f"Corners: {corners}")    
+        # print(f"Corners: {corners}")    
         
         cv2.waitKey(0)
         cv2.destroyAllWindows()
