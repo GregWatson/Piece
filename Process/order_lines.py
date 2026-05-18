@@ -10,7 +10,17 @@ def order_lines(unordered_lines):
 
     print(f"Ordering list of {len(unordered_lines)} lines. {type(unordered_lines)}")
     rem_lines = [((line[0][0], line[0][1]), (line[0][2], line[0][3])) for line in unordered_lines]
-    o_lines = [rem_lines.pop()]
+
+    # compute line lengths and sort rem_lines by length, longest first. 
+    # This is a heuristic to start with a line that is likely to be part of the outline of the piece, 
+    # rather than a short line that might be an internal line or noise.
+    line_lengths = [math.sqrt((line[0][0]-line[1][0])**2 + (line[0][1]-line[1][1])**2) for line in rem_lines]
+    line_info = list(zip(line_lengths, rem_lines))
+    line_info.sort(key=lambda x: x[0], reverse=True)
+    print(f"Starting with longest line length {line_info[0][0]}: {line_info[0][1][0]} - {line_info[0][1][1]}")
+    rem_lines = [line for _, line in line_info]
+
+    o_lines = [rem_lines.pop(0)]
     pt = o_lines[0][1]
     while len(rem_lines) > 1:
         # find a point in rem_lines closest to pt

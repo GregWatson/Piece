@@ -1,4 +1,6 @@
-# Find the center of mass of the white pixels in the pre-processed image
+# Find the center of mass of the white pixels in the pre-processed image.
+# (Image must be purely black and white, with the piece in white and the background in black.)
+
 import numpy as np
 
 def find_piece_center(img):

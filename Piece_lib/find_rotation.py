@@ -1,32 +1,50 @@
-import cv2
 import numpy as np
-from Process.order_lines import order_lines
+# from Process.order_lines import order_lines
+from FL_lib.find_lines import find_lines
+from FL_lib.fl_core import get_angle
 
-# Find rotation by rotating the image from -45 to +45 degress and using the
-# rotation with the minimum Bounding Box area.
-# cx,cy is the center of mass of the piece which is one choice for center of rotation.
-# Another choice is the center of the initial bounding box.
-def find_rotation_by_BB(img, cx, cy):
+# Find rotation by either:
+# 1. Finding long lines that we can infer as edges, and using the angle of 
+#    the longest line as the rotation. This is more accurate if we have a 
+#    good long line, but may fail if the piece is very irregular or if the 
+#    lines are not detected well.
+# 2. If we can't find a long line, we can rotate the image from -45 to +45 
+#    degrees and find the bounding box of the lines at each angle, and use 
+#    the angle that gives us the minimum bounding box area as the rotation. 
+#    This is less accurate but more robust to irregular pieces and line 
+#    detection issues
+# 
+# We can also use the center of mass of the piece as the center of rotation, 
+# or we can use the center of the initial bounding box of the lines as the 
+# center of rotation. The latter may be more stable if the piece is very 
+# irregular and the center of mass is not a good representation of the piece's 
+# actual center.
+
+# Input is center of mass of piece, and the image. 
+# Returns the rotation angle in radians, and the center of rotation (cx, cy)
+# We can also return the lines we found for debugging purposes - lines are 
+# returned as a list of tuples of (x1, y1, x2, y2) for the start and end points 
+# of each line.
+
+def find_rotation(img, cx, cy):
     if img is None:
         print("Error: Image is None")
         return 0
 
     gray = img
 
-    # Edge detection
-    edges = cv2.Canny(gray, 50, 150, apertureSize=3)
+    # Find a set of lines for the outline my own algorithm.
+    full_lines = find_lines(gray)
+    lines = []
+    
+    # Get lines as just start and end points for easier processing.
+    if len(full_lines): 
+        lines = [(line[0][0][0], line[0][0][1], line[0][-1][0], line[0][-1][1]) for line in full_lines]
 
-    # Find a set of lines for the outline using Hough Transform (Probabilistic)
-    lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=15, minLineLength=20 , maxLineGap=10)
-    o_lines = order_lines(lines)
-
-    # Find corners from o_lines.
-
-
-    line_count = 0
+    line_count = len(full_lines)
     min_angle = 0
     
-    if lines is not None:
+    if len(lines):
         line_count = len(lines)
 
         # Find the bounding box of the piece using line end points. This is a rough approximation but should be good enough for rotation estimation.
@@ -38,7 +56,7 @@ def find_rotation_by_BB(img, cx, cy):
         bb_max_y = float('-inf')
 
         for line in lines:
-            x1, y1, x2, y2 = line[0]
+            x1, y1, x2, y2 = line
             bb_cx += (x1 + x2) / 2
             bb_cy += (y1 + y2) / 2
             bb_min_x = min(bb_min_x, x1, x2)
@@ -57,20 +75,23 @@ def find_rotation_by_BB(img, cx, cy):
         cx = bb_cx
         cy = bb_cy
 
-
-        # See if we have any LONG lines that are EDGES.
+        # See if we have any LONG lines that we can infer as EDGES.
         len_threshold = (bb_xlength + bb_ylength) * 0.2
         line_max_length = 0
+        min_angle = 0
+        max_line = None
         for line in lines:
-            x1, y1, x2, y2 = line[0]
+            x1, y1, x2, y2 = line
             # print(f"Line segment is {x1},{y1} - {x2},{y2}")
             length = np.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
             if length > len_threshold:
                 if length > line_max_length:
                     line_max_length = length
+                    max_line = line
                     # get angle
-                    min_angle = np.degrees(np.arctan2(y2 - y1, x2 - x1))
-                    print(f"Longer line found: ({x1}, {y1}) to ({x2}, {y2}) with length {length}   (thresh: {len_threshold})  angle {min_angle}")
+            if line_max_length:
+                min_angle = get_angle(max_line[3] - max_line[1], max_line[2] - max_line[0])
+                print(f"Longest line found: ({x1}, {y1}) to ({x2}, {y2}) with length {length}   (thresh: {len_threshold})  angle {min_angle}")
 
         # If we couldn't find a long line then we will just use the bounding box method.
 
@@ -79,7 +100,7 @@ def find_rotation_by_BB(img, cx, cy):
             # translate the set of line endings so that cx,cy is at 0,0
             centered_points = []
             for line in lines:
-                x1, y1, x2, y2 = line[0]
+                x1, y1, x2, y2 = line
                 centered_points.append((x1 - cx, y1 - cy)) 
                 centered_points.append((x2 - cx, y2 - cy))
 
@@ -100,20 +121,8 @@ def find_rotation_by_BB(img, cx, cy):
                 area = (bbmax[0] - bbmin[0]) * (bbmax[1] - bbmin[1])
                 if area < min_area:
                     min_area = area
-                    min_angle = rot_angle
-                    print(f"New min area {area} at angle {rot_angle}")
+                    min_angle = rot_rad
+                    print(f"New min area {area} at angle {rot_angle} degrees")
 
-        # Create a copy for drawing
-        display_img = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR) if len(img.shape) == 2 else img.copy()
-
-        for line in lines:
-            x1, y1, x2, y2 = line[0]
-            cv2.line(display_img, (x1, y1), (x2, y2), (0, 255, 0), 2)
-
-        # Mark the center of rotation
-        cv2.circle(display_img, (cx, cy), 8, (0, 0, 255), -1) # Draw red circle
-            
-        cv2.imshow("Detected Lines", display_img)
-
-    print(f"Lines found: {line_count}.   Angle {min_angle}")
+    print(f"Lines found: {line_count}.   Angle {np.degrees(min_angle):.2f} degrees")
     return min_angle, cx, cy, lines
