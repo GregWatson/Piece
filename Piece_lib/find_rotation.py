@@ -23,7 +23,7 @@ from FL_lib.fl_core import get_angle
 # Input is center of mass of piece, and the image. 
 # Returns the rotation angle in radians, and the center of rotation (cx, cy)
 # We can also return the lines we found for debugging purposes - lines are 
-# returned as a list of tuples of (x1, y1, x2, y2) for the start and end points 
+# returned as a list of tuples of [(x1, y1), (x2, y2)] for the start and end points 
 # of each line.
 
 def find_rotation(img, cx, cy):
@@ -39,7 +39,7 @@ def find_rotation(img, cx, cy):
     
     # Get lines as just start and end points for easier processing.
     if len(full_lines): 
-        lines = [(line[0][0][0], line[0][0][1], line[0][-1][0], line[0][-1][1]) for line in full_lines]
+        lines = [[(line[0][0][0], line[0][0][1]), (line[0][-1][0], line[0][-1][1])] for line in full_lines]
 
     line_count = len(full_lines)
     min_angle = 0
@@ -56,7 +56,7 @@ def find_rotation(img, cx, cy):
         bb_max_y = float('-inf')
 
         for line in lines:
-            x1, y1, x2, y2 = line
+            (x1, y1), (x2, y2) = line
             bb_cx += (x1 + x2) / 2
             bb_cy += (y1 + y2) / 2
             bb_min_x = min(bb_min_x, x1, x2)
@@ -81,7 +81,7 @@ def find_rotation(img, cx, cy):
         min_angle = 0
         max_line = None
         for line in lines:
-            x1, y1, x2, y2 = line
+            (x1, y1), (x2, y2) = line
             # print(f"Line segment is {x1},{y1} - {x2},{y2}")
             length = np.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
             if length > len_threshold:
@@ -100,7 +100,7 @@ def find_rotation(img, cx, cy):
             # translate the set of line endings so that cx,cy is at 0,0
             centered_points = []
             for line in lines:
-                x1, y1, x2, y2 = line
+                (x1, y1), (x2, y2) = line
                 centered_points.append((x1 - cx, y1 - cy)) 
                 centered_points.append((x2 - cx, y2 - cy))
 

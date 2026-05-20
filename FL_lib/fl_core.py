@@ -1,6 +1,25 @@
 # core routines used for line finding
 import numpy as np
 
+def rotate_point(point, center, angle_rad):
+    # Rotate a point around a center by a given angle in radians.
+    # Returns the new coordinates of the point after rotation.
+    x, y = point
+    cx, cy = center
+    cos_a = np.cos(-angle_rad)
+    sin_a = np.sin(-angle_rad)
+    new_x = cos_a * (x - cx) - sin_a * (y - cy) + cx
+    new_y = sin_a * (x - cx) + cos_a * (y - cy) + cy
+    return (new_x, new_y)
+
+def rotate_line(line, center, angle_rad):
+    # Rotate a line (defined by two points) around a center by a given angle in radians.
+    # Returns the new coordinates of the line after rotation.
+    (x1, y1), (x2, y2) = line
+    new_start = rotate_point((x1, y1), center, angle_rad)
+    new_end = rotate_point((x2, y2), center, angle_rad)
+    return (new_start, new_end)
+
 def get_distance_between_2_points(pt1, pt2):
     return np.linalg.norm(np.array(pt1) - np.array(pt2))
 
