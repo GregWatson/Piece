@@ -90,7 +90,7 @@ def find_rotation(img, cx, cy):
                     max_line = line
                     # get angle
             if line_max_length:
-                min_angle = get_angle(max_line[3] - max_line[1], max_line[2] - max_line[0])
+                min_angle = get_angle(max_line[1],max_line[0])
                 print(f"Longest line found: ({x1}, {y1}) to ({x2}, {y2}) with length {length}   (thresh: {len_threshold})  angle {min_angle}")
 
         # If we couldn't find a long line then we will just use the bounding box method.

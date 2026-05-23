@@ -82,9 +82,9 @@ def main():
         print(f"Rotated image around ({center_x}, {center_y}) by {rotation_angle} degrees")
         
         # Find the corners of the piece
-        corners = find_corners(rotated_lines, corner_thresh=50, end_to_end_dist_thresh=20, debug=False)
-        for _, point, _ in corners:
-            cv2.circle(rotated_image, (int(point[0]), int(point[1])), 10, (0, 0, 255), -1)
+        corners = find_corners(rotated_lines, corner_thresh=50, end_to_end_dist_thresh=20, debug=True)
+        for _, point, angle_rad in corners:
+            cv2.circle(rotated_image, (int(point[0]), int(point[1])), 10, (0, 0, int(255*angle_rad/(2*np.pi))), -1)
         cv2.imshow("Corners", rotated_image)
         # print(f"Corners: {corners}")    
         
