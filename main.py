@@ -3,9 +3,8 @@ import numpy as np
 import argparse
 import sys
 from Process.pre_proc_image import pre_process_image
-from Piece_lib.find_rotation import find_rotation
-from Piece_lib.find_piece_center import find_piece_center
-from FL_lib.fl_core import rotate_line
+from FL_lib.find_rotation import find_rotation
+from FL_lib.fl_core import rotate_line, find_piece_center
 from FL_lib.find_corners import find_corners
 
 def main():
