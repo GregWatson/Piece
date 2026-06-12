@@ -6,11 +6,13 @@ from Process.pre_proc_image import pre_process_image
 from FL_lib.find_rotation import find_rotation
 from FL_lib.fl_core import rotate_line, find_piece_center
 from FL_lib.find_corners import find_corners
+from FL_lib.get_piece_info import get_piece_info
 
 def main():
     parser = argparse.ArgumentParser(description="Piece Project CLI")
     parser.add_argument("-p", "--picture", help="Path to an image file to display", type=str)
     parser.add_argument("-e", "--edges", help="Convert image specified by -p to an image of just edges, and save it to specified file.", type=str)
+    parser.add_argument("-d", "--debug", action="store_true", help="Enable debug mode with verbose output")
     args = parser.parse_args()
 
     if args.picture:
@@ -35,57 +37,77 @@ def main():
 
         pre_processed_image = pre_process_image(resized_image)
 
-        # Get the edges and lines, and find the rotation of the piece by finding the minimum bounding box of the lines. 
-        # This is a rough approximation but should be good enough for rotation estimation.
+        # Find the number of pieces in the image using the get_piece_info function
+        pieces = get_piece_info(pre_processed_image)
+        print(f"Detected {len(pieces)} piece(s) in the image.")
+        for idx, piece in enumerate(pieces):
+            print(f"Piece {idx+1}: Bounding Box = {piece['box']}, Centroid = {piece['centroid']}, Area = {piece['area']}")
 
-        # Extract edges using Canny edge detection. This will give us a binary image where the edges
-        # are white and the rest is black. We can then use this to find lines and estimate rotation.
-        edges = cv2.Canny(pre_processed_image, 50, 150, apertureSize=3)
+        # for each piece, we want to find the edges and lines and corners.
+        for idx, piece in enumerate(pieces):
+            print(f"\nProcessing Piece {idx+1}: Bounding Box = {piece['box']}, Centroid = {piece['centroid']}, Area = {piece['area']}")
 
-        if args.edges:
-            cv2.imwrite(args.edges, edges)
-            print(f"Saved edge-detected image to {args.edges}")
-            return
+            # create a new image that is just the piece, by cropping the pre_processed_image using the bounding box of the piece.
+            x, y, w, h = piece['box']
+            piece_image = pre_processed_image[y:y+h, x:x+w]
 
-        # get center of mass of piece
-        center_x, center_y = find_piece_center(pre_processed_image)
+            # scale the image to 300x300.
+            piece_image = cv2.resize(piece_image, (300, 300))
 
-        rotation_angle_rad, center_x, center_y, lines = find_rotation(edges, center_x, center_y)
-        rotation_angle = np.degrees(rotation_angle_rad)
+            # Add black padding around the piece to make it 500x500 so that the rotation and line detection works better. We can add a padding of 50 pixels on each side, which will give us a 600x600 image. This will also help us avoid issues with pieces that are close to the edge of the image.
+            piece_image = cv2.copyMakeBorder(piece_image, 100,100,100,100, cv2.BORDER_CONSTANT, value=[0, 0, 0])
 
-        print(f"lines are {lines}")
-        # print(f"Rotation angle: {rotation_angle}  center of rotation: ({center_x}, {center_y})")
-        
-        # rotate the image around the point center_x, center_y by the rotation angle
-        rotation_matrix = cv2.getRotationMatrix2D((center_x, center_y), rotation_angle, 1.0)
-        rotated_image_grey = cv2.warpAffine(pre_processed_image, rotation_matrix, (500, 500))
-        rotated_image = cv2.cvtColor(rotated_image_grey, cv2.COLOR_GRAY2BGR)
+            # display the piece image in a new window for debugging purposes
+            if args.debug: cv2.imshow(f"Piece {idx+1}", piece_image)
+            
+            # Get the edges and lines, and find the rotation of the piece by finding the minimum bounding box of the lines. 
+            # This is a rough approximation but should be good enough for rotation estimation.
 
-        # Rotate the lines we found as well for debugging purposes, and draw them on the rotated image. 
-        # This will help us see if the rotation is correct and if the lines are aligned with the edges 
-        # of the piece after rotation. We can also use this to find the corners of the piece after rotation, 
-        # which will be useful for further processing steps like matching pieces together.
-        # We can also draw the lines we found on the rotated image for debugging purposes
+            # Extract edges using Canny edge detection. This will give us a binary image where the edges
+            # are white and the rest is black. We can then use this to find lines and estimate rotation.
+            edges = cv2.Canny(piece_image, 50, 150, apertureSize=3)
 
-        rotated_lines = [ rotate_line(line, (center_x, center_y), rotation_angle_rad) for line in lines ]
+            if args.edges:
+                cv2.imwrite(args.edges, edges)
+                print(f"Saved edge-detected image to {args.edges}")
+                return
 
-        # Show UN-rotated lines
-        for (x1, y1), (x2, y2) in lines:
-            cv2.line(rotated_image, (x1, y1), (x2, y2), (25, 155, 145), 1)
+            # get center of mass of piece
+            (center_x, center_y) = piece['centroid']
 
-        # Show rotated lines
-        for (x1,y1), (x2,y2) in rotated_lines:
-            cv2.line(rotated_image, (int(x1), int(y1)), (int(x2), int(y2)), (80, 255, 80), 3)
+            rotation_angle_rad, center_x, center_y, lines = find_rotation(edges, center_x, center_y)
+            rotation_angle = np.degrees(rotation_angle_rad)
 
-        cv2.imshow("Rotated Piece", rotated_image)
-        print(f"Rotated image around ({center_x}, {center_y}) by {rotation_angle} degrees")
-        
-        # Find the corners of the piece
-        corners = find_corners(rotated_lines, corner_thresh=50, end_to_end_dist_thresh=20, debug=True)
-        for _, point, angle_rad in corners:
-            cv2.circle(rotated_image, (int(point[0]), int(point[1])), 10, (0, 0, int(255*angle_rad/(2*np.pi))), -1)
-        cv2.imshow("Corners", rotated_image)
-        # print(f"Corners: {corners}")    
+            # rotate the image around the point center_x, center_y by the rotation angle
+            rotation_matrix = cv2.getRotationMatrix2D((center_x, center_y), rotation_angle, 1.0)
+            rotated_image_grey = cv2.warpAffine(piece_image, rotation_matrix, (500, 500))
+            rotated_image = cv2.cvtColor(rotated_image_grey, cv2.COLOR_GRAY2BGR)
+
+            # Rotate the lines we found as well for debugging purposes, and draw them on the rotated image. 
+            # This will help us see if the rotation is correct and if the lines are aligned with the edges 
+            # of the piece after rotation. We can also use this to find the corners of the piece after rotation, 
+            # which will be useful for further processing steps like matching pieces together.
+            # We can also draw the lines we found on the rotated image for debugging purposes
+
+            rotated_lines = [ rotate_line(line, (center_x, center_y), rotation_angle_rad) for line in lines ]
+
+            # Show UN-rotated lines
+            for (x1, y1), (x2, y2) in lines:
+                cv2.line(rotated_image, (x1, y1), (x2, y2), (25, 155, 145), 1)
+
+            # Show rotated lines
+            for (x1,y1), (x2,y2) in rotated_lines:
+                cv2.line(rotated_image, (int(x1), int(y1)), (int(x2), int(y2)), (80, 255, 80), 3)
+
+            #cv2.imshow("Rotated Piece", rotated_image)
+            #print(f"Rotated image around ({center_x}, {center_y}) by {rotation_angle} degrees")
+            
+            # Find the corners of the piece
+            corners = find_corners(rotated_lines, corner_thresh=50, end_to_end_dist_thresh=20, debug=args.debug)
+            for _, point, angle_rad in corners:
+                cv2.circle(rotated_image, (int(point[0]), int(point[1])), 10, (0, 0, int(255*angle_rad/(2*np.pi))), -1)
+            cv2.imshow(f"Corners {idx+1}", rotated_image)
+            # print(f"Corners: {corners}")    
         
         cv2.waitKey(0)
         cv2.destroyAllWindows()

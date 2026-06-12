@@ -22,7 +22,7 @@ def pre_process_image(img, debug=False):
     # Let's try Otsu first as it's robust for bimodal histograms.
     opt_thresh, thresh = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     
-    print(f"Optimum threshold: {opt_thresh}")
+    # print(f"Optimum threshold: {opt_thresh}")
 
     # Invert if the background is detected as white (pieces are black)
     # Usually we want pieces to be white (255) and background black (0) for findContours
