@@ -1,10 +1,12 @@
+from email.mime import image
+
 import cv2
 import numpy as np
 import argparse
 import sys
 from Process.pre_proc_image import pre_process_image
 from FL_lib.find_rotation import find_rotation
-from FL_lib.fl_core import rotate_line, find_piece_center
+from FL_lib.fl_core import rotate_line, get_distance_between_2_points
 from FL_lib.find_corners import find_corners
 from FL_lib.get_piece_info import get_piece_info
 
@@ -21,8 +23,12 @@ def main():
             print(f"Error: Could not load image from {args.picture}")
             sys.exit(1)
         
-        # Resize to 500x500
-        resized_image = cv2.resize(image, (500, 500))
+        # if the image is less than 500 x 500 then enlarge it to 500 x 500 for better processing. 
+        # We can use cv2.resize for this, and we can use interpolation to maintain quality. This will help us ensure that the line detection and rotation estimation works well even for smaller images.
+        # scale_factor = max(1.0, 500.0 / max(image.shape[0], image.shape[1]))
+        resized_image = image.copy()
+        # resized_image = cv2.resize(image, (0, 0), fx=scale_factor, fy=scale_factor, interpolation=cv2.INTER_CUBIC)
+        # print(f"Loaded image from {args.picture} with original size {image.shape[1]}x{image.shape[0]}, resized to {resized_image.shape[1]}x{resized_image.shape[0]} for processing.")
         
         # Display image
         if not args.edges:
@@ -47,15 +53,24 @@ def main():
         for idx, piece in enumerate(pieces):
             print(f"\nProcessing Piece {idx+1}: Bounding Box = {piece['box']}, Centroid = {piece['centroid']}, Area = {piece['area']}")
 
-            # create a new image that is just the piece, by cropping the pre_processed_image using the bounding box of the piece.
+            # create a new image that is just the piece, by cropping the pre_processed_image using the 
+            # bounding box of the piece.
             x, y, w, h = piece['box']
             piece_image = pre_processed_image[y:y+h, x:x+w]
 
-            # scale the image to 300x300.
-            piece_image = cv2.resize(piece_image, (300, 300))
+            # compute the radius of the surrounding circle.
+            # We can use this to increase the canvas size to ensure that we can rotate the piece without cutting off any parts of it. 
+            diameter = get_distance_between_2_points((x,y), (x+w, y+h))
+
+            add_height = max(0, int(diameter - h)) //2 + 1
+            add_width = max(0, int(diameter - w)) // 2 + 1
 
             # Add black padding around the piece to make it 500x500 so that the rotation and line detection works better. We can add a padding of 50 pixels on each side, which will give us a 600x600 image. This will also help us avoid issues with pieces that are close to the edge of the image.
-            piece_image = cv2.copyMakeBorder(piece_image, 100,100,100,100, cv2.BORDER_CONSTANT, value=[0, 0, 0])
+            piece_image = cv2.copyMakeBorder(piece_image, add_height, add_height, add_width, add_width, cv2.BORDER_CONSTANT, value=[0, 0, 0])
+
+            # scale the image to 500 x 500 for better processing. We can use cv2.resize for this, and we can use interpolation to maintain quality. This will help us ensure that the line detection and rotation estimation works well even for smaller pieces.
+            scale_factor = 500.0 / max(piece_image.shape[0], piece_image.shape[1])
+            piece_image = cv2.resize(piece_image, (0, 0), fx=scale_factor, fy=scale_factor, interpolation=cv2.INTER_CUBIC)
 
             # display the piece image in a new window for debugging purposes
             if args.debug: cv2.imshow(f"Piece {idx+1}", piece_image)
@@ -103,7 +118,7 @@ def main():
             #print(f"Rotated image around ({center_x}, {center_y}) by {rotation_angle} degrees")
             
             # Find the corners of the piece
-            corners = find_corners(rotated_lines, corner_thresh=50, end_to_end_dist_thresh=20, debug=args.debug)
+            corners = find_corners(rotated_lines, corner_thresh=50, end_to_end_dist_thresh=20, debug=False)
             for _, point, angle_rad in corners:
                 cv2.circle(rotated_image, (int(point[0]), int(point[1])), 10, (0, 0, int(255*angle_rad/(2*np.pi))), -1)
             cv2.imshow(f"Corners {idx+1}", rotated_image)
