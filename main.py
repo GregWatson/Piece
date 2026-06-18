@@ -4,15 +4,17 @@ import cv2
 import numpy as np
 import argparse
 import sys
-from Process.pre_proc_image import pre_process_image
+from FL_lib.pre_proc_image import pre_process_image
 from FL_lib.find_rotation import find_rotation
-from FL_lib.fl_core import rotate_line, get_distance_between_2_points
+from FL_lib.fl_core import rotate_line, get_distance_between_2_points, show_image
 from FL_lib.find_corners import find_corners
 from FL_lib.get_piece_info import get_piece_info
+from FL_lib.fl_remove_background import fl_remove_background
 
 def main():
     parser = argparse.ArgumentParser(description="Piece Project CLI")
     parser.add_argument("-p", "--picture", help="Path to an image file to display", type=str)
+    parser.add_argument("-t", "--type", help="Type of image: normal = one or more jigsaw pieces. reverse = the reverse side of the pieces (typically blank). Default is normal", choices=["normal", "reverse"], default="normal")
     parser.add_argument("-e", "--edges", help="Convert image specified by -p to an image of just edges, and save it to specified file.", type=str)
     parser.add_argument("-d", "--debug", action="store_true", help="Enable debug mode with verbose output")
     args = parser.parse_args()
@@ -30,18 +32,19 @@ def main():
         # resized_image = cv2.resize(image, (0, 0), fx=scale_factor, fy=scale_factor, interpolation=cv2.INTER_CUBIC)
         # print(f"Loaded image from {args.picture} with original size {image.shape[1]}x{image.shape[0]}, resized to {resized_image.shape[1]}x{resized_image.shape[0]} for processing.")
         
-        # Display image
-        if not args.edges:
-            cv2.imshow("Original", resized_image)
-            print(f"Displaying image from {args.picture} in 'Original' window (500x500)")
+        # Clean up image to make it easier to analyze a jigsaw piece.
+        cleaned_up = fl_remove_background(resized_image, debug=args.debug, image_type=args.type)
+        show_image(cleaned_up, str="Background removed", max=1000, wait_for_key=True)
+        # exit(0)
 
-        # Clean up image to make it easier to analyze a jigsaw piece. This includes:
         # - Convert to grayscale
         # - Blur to reduce noise
         # - Threshold to get binary image
         # - Morphological operations to close gaps
 
-        pre_processed_image = pre_process_image(resized_image)
+
+        pre_processed_image = pre_process_image(cleaned_up, debug=args.debug)
+        show_image(pre_processed_image, str="Pre-processed Image", max=1000, wait_for_key=True)
 
         # Find the number of pieces in the image using the get_piece_info function
         pieces = get_piece_info(pre_processed_image)
@@ -62,8 +65,8 @@ def main():
             # We can use this to increase the canvas size to ensure that we can rotate the piece without cutting off any parts of it. 
             diameter = get_distance_between_2_points((x,y), (x+w, y+h))
 
-            add_height = max(0, int(diameter - h)) //2 + 1
-            add_width = max(0, int(diameter - w)) // 2 + 1
+            add_height = max(0, int(diameter - h)) //2 + 10
+            add_width = max(0, int(diameter - w)) // 2 + 10
 
             # Add black padding around the piece to make it 500x500 so that the rotation and line detection works better. We can add a padding of 50 pixels on each side, which will give us a 600x600 image. This will also help us avoid issues with pieces that are close to the edge of the image.
             piece_image = cv2.copyMakeBorder(piece_image, add_height, add_height, add_width, add_width, cv2.BORDER_CONSTANT, value=[0, 0, 0])
@@ -87,8 +90,8 @@ def main():
                 print(f"Saved edge-detected image to {args.edges}")
                 return
 
-            # get center of mass of piece
-            (center_x, center_y) = piece['centroid']
+            # get center of image
+            (center_x, center_y) = (piece_image.shape[1] // 2, piece_image.shape[0] // 2)
 
             rotation_angle_rad, center_x, center_y, lines = find_rotation(edges, center_x, center_y)
             rotation_angle = np.degrees(rotation_angle_rad)

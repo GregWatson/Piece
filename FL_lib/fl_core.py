@@ -1,4 +1,6 @@
 # core routines used for line finding
+from email.mime import image
+
 import numpy as np
 import math
 import cv2
@@ -116,3 +118,12 @@ def draw_lines_on_color_image(image, lines, palette, dx=3, thickness=1):
         (x1, y1), (x2, y2) = line
         cv2.line(image, (int(x1+dx), int(y1)), (int(x2+dx), int(y2)), palette[color_index % len(palette)], thickness=thickness)
         color_index = (color_index + 1) % len(palette)
+
+def show_image(img, str="Image", max=1000, wait_for_key=True):
+    x_scale_factor = 1000.0 / img.shape[1]
+    y_scale_factor = 1000.0 / img.shape[0]
+    scale_factor = min(x_scale_factor, y_scale_factor, 1.0)
+    resized_image = cv2.resize(img, (0, 0), fx=scale_factor, fy=scale_factor, interpolation=cv2.INTER_CUBIC)
+    cv2.imshow(str, resized_image)
+    if wait_for_key:
+        cv2.waitKey(0)

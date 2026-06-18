@@ -1,6 +1,8 @@
 import cv2
 import numpy as np
 
+from FL_lib.fl_core import show_image
+
 def pre_process_image(img, debug=False):
     """
     Clean up image to make it easier to analyze a jigsaw piece. This includes:
@@ -9,8 +11,7 @@ def pre_process_image(img, debug=False):
     - Threshold to get binary image
     - Morphological operations to close gaps
     """
-    # - Find contours and filter by area
-
+    # - Convert to greyscale
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     
     # Blur to reduce noise
@@ -35,10 +36,5 @@ def pre_process_image(img, debug=False):
     # Morphological operations to close gaps
     kernel = np.ones((3,3), np.uint8)
     thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel, iterations=2)
-    
-    # contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    # print(f"Found {len(contours)} contours")
-    # pieces = []
-    # piece_id = 1
 
     return thresh
