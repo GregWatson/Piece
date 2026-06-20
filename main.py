@@ -54,7 +54,7 @@ def main():
 
         # for each piece, we want to find the edges and lines and corners.
         for idx, piece in enumerate(pieces):
-            if idx > 100 : exit(0)
+            # if idx != 8 : continue
             print(f"\nProcessing Piece {idx+1}: Bounding Box = {piece['box']}, Centroid = {piece['centroid']}, Area = {piece['area']}")
 
             # create a new image that is just the piece, by cropping the pre_processed_image using the 
@@ -108,6 +108,7 @@ def main():
             rotation_matrix = cv2.getRotationMatrix2D((center_x, center_y), rotation_angle, 1.0)
             rotated_image_grey = cv2.warpAffine(piece_image, rotation_matrix, (500, 500))
             rotated_image = cv2.cvtColor(rotated_image_grey, cv2.COLOR_GRAY2BGR)
+            w, h = rotated_image_grey.shape[1], rotated_image_grey.shape[0]
 
             # Rotate the lines we found as well for debugging purposes, and draw them on the rotated image. 
             # This will help us see if the rotation is correct and if the lines are aligned with the edges 
@@ -116,6 +117,14 @@ def main():
             # We can also draw the lines we found on the rotated image for debugging purposes
 
             rotated_lines = [ rotate_line(line, (center_x, center_y), rotation_angle_rad) for line in lines ]
+            # get top_left and bottom right bounding box of rotated lines.
+            tl_x = min([min(line[0][0], line[1][0]) for line in rotated_lines])
+            tl_y = min([min(line[0][1], line[1][1]) for line in rotated_lines])
+            br_x = max([max(line[0][0], line[1][0]) for line in rotated_lines])
+            br_y = max([max(line[0][1], line[1][1]) for line in rotated_lines])
+
+            # draw bbox of lines on rotated image for debugging purposes
+            cv2.rectangle(rotated_image, (int(tl_x), int(tl_y)), (int(br_x), int(br_y)), (255, 0, 0), 1)
 
             # Show UN-rotated lines
             for (x1, y1), (x2, y2) in lines:
@@ -126,7 +135,7 @@ def main():
                 cv2.line(rotated_image, (int(x1), int(y1)), (int(x2), int(y2)), (80, 255, 80), 3)
             
             # Find the corners of the piece
-            corners = find_corners(rotated_lines, corner_thresh=50, end_to_end_dist_thresh=20, debug=False)
+            corners = find_corners(rotated_lines, (tl_x, tl_y), (br_x, br_y), end_to_end_dist_thresh=20, debug=args.debug)
             for _, point, angle_rad in corners:
                 cv2.circle(rotated_image, (int(point[0]), int(point[1])), 10, (0, 0, int(255*angle_rad/(2*np.pi))), -1)
             show_image(rotated_image, str=f"Corners {idx+1}", max=1000, wait_for_key=True)

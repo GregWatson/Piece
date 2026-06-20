@@ -112,7 +112,8 @@ def find_rotation(img, cx, cy, debug=False):
 
 
     # Find a set of lines for the outline using my own algorithm.
-    full_lines = find_lines(gray, debug=debug)
+    len_thresh = (cx + cy) / 40.0
+    full_lines = find_lines(gray, len_thresh=len_thresh, debug=debug)
     lines = []
     
     # Get lines as just start and end points for easier processing.
