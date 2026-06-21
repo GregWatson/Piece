@@ -4,12 +4,22 @@ import cv2
 import numpy as np
 import argparse
 import sys
-from FL_lib.pre_proc_image import pre_process_image
-from FL_lib.find_rotation import find_rotation
-from FL_lib.fl_core import rotate_line, get_distance_between_2_points, show_image
-from FL_lib.find_corners import find_corners
-from FL_lib.get_piece_info import get_piece_info
-from FL_lib.fl_remove_background import fl_remove_background
+import os
+
+# Get the absolute path to the directory containing the module
+module_path = os.path.abspath("../FL_lib")
+
+# Add it to the Python search path
+if module_path not in sys.path:
+    # print(f"Adding path {module_path} to sys.path")
+    sys.path.append(module_path)
+    
+from pre_proc_image import pre_process_image
+from find_rotation import find_rotation
+from fl_core import rotate_line, get_distance_between_2_points, show_image
+from find_corners import find_corners
+from get_piece_info import get_piece_info
+from fl_remove_background import fl_remove_background
 
 def main():
     parser = argparse.ArgumentParser(description="Piece Project CLI")
@@ -70,10 +80,10 @@ def main():
             # cutting off any parts of it. 
             diameter = get_distance_between_2_points((x,y), (x+w, y+h))
 
-            add_height = max(0, int(diameter - h)) //2 + 10
-            add_width = max(0, int(diameter - w)) // 2 + 10
+            add_height = max(0, int(diameter - h)) // 2 + 5
+            add_width = max(0, int(diameter - w)) // 2 + 5
 
-            # Add black padding around the piece so that the rotation and line detection works better. 
+            # Add black padding around the piece so that the rotation wont cut off any parts of it.
             piece_image = cv2.copyMakeBorder(piece_image, add_height, add_height, add_width, add_width, cv2.BORDER_CONSTANT, value=[0, 0, 0])
             cx += add_width
             cy += add_height
