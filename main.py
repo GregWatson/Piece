@@ -16,10 +16,11 @@ if module_path not in sys.path:
     
 from pre_proc_image import pre_process_image
 from find_rotation import find_rotation
-from fl_core import rotate_line, get_distance_between_2_points, show_image
+from fl_core import rotate_line, show_image, get_bounding_box_from_lines, rotate_point
 from find_corners import find_corners
 from get_piece_info import get_piece_info
 from fl_remove_background import fl_remove_background
+from fl_pad_and_scale import fl_pad_and_scale
 
 def main():
     parser = argparse.ArgumentParser(description="Piece Project CLI")
@@ -44,23 +45,28 @@ def main():
         
         # Clean up image to make it easier to analyze a jigsaw piece.
         cleaned_up = fl_remove_background(resized_image, debug=args.debug, image_type=args.type)
-        show_image(cleaned_up, str="Background removed", max=1000, wait_for_key=True)
+        # show_image(cleaned_up, str="Background removed", max=1000, wait_for_key=True)
         # exit(0)
 
         # - Convert to grayscale
         # - Blur to reduce noise
         # - Threshold to get binary image
         # - Morphological operations to close gaps
-
-
         pre_processed_image = pre_process_image(cleaned_up, debug=args.debug)
-        show_image(pre_processed_image, str="Pre-processed Image", max=1000, wait_for_key=True)
 
         # Find the number of pieces in the image using the get_piece_info function
         pieces = get_piece_info(pre_processed_image)
+
+        pieces_img = pre_processed_image.copy()
         print(f"Detected {len(pieces)} piece(s) in the image.")
         for idx, piece in enumerate(pieces):
             print(f"Piece {idx+1}: Bounding Box = {piece['box']}, Centroid = {piece['centroid']}, Area = {piece['area']}")
+            # draw bbox and centroid in grey
+            x,y,w,h = piece['box']
+            cv2.rectangle(pieces_img, (x,y), (x+w, y+h), (127,127,127),2)
+            cv2.circle(pieces_img, (int(piece['centroid'][0]), int(piece['centroid'][1])), 5, (127,127,127), -1)
+        show_image(pieces_img, str="Pre-processed Image with bbox and centroids", max=1000, wait_for_key=True)
+
 
         # for each piece, we want to find the edges and lines and corners.
         for idx, piece in enumerate(pieces):
@@ -69,38 +75,15 @@ def main():
 
             # create a new image that is just the piece, by cropping the pre_processed_image using the 
             # bounding box of the piece.
-            x, y, w, h = piece['box']
+            orig_x, orig_y, w, h = piece['box']
             cx, cy = piece['centroid']
-            piece_image = pre_processed_image[y:y+h, x:x+w]
-            cx -= x
-            cy -= y
+            piece_image, _, rot_center, inverse_transform_fn = fl_pad_and_scale(pre_processed_image, 
+                                                                                [[(orig_x,orig_y), (orig_x+w, orig_y+h)]],
+                                                                                piece['centroid'],
+                                                                                new_img_size = 500, 
+                                                                                debug=args.debug)
 
-            # compute the radius of the surrounding circle.
-            # We can use this to increase the canvas size to ensure that we can rotate the piece without 
-            # cutting off any parts of it. 
-            diameter = get_distance_between_2_points((x,y), (x+w, y+h))
-
-            add_height = max(0, int(diameter - h)) // 2 + 5
-            add_width = max(0, int(diameter - w)) // 2 + 5
-
-            # Add black padding around the piece so that the rotation wont cut off any parts of it.
-            piece_image = cv2.copyMakeBorder(piece_image, add_height, add_height, add_width, add_width, cv2.BORDER_CONSTANT, value=[0, 0, 0])
-            cx += add_width
-            cy += add_height
-
-            # scale the image to 500 x 500 for better processing. We can use cv2.resize for this, and we can use interpolation to maintain quality. This will help us ensure that the line detection and rotation estimation works well even for smaller pieces.
-            scale_factor = 500.0 / max(piece_image.shape[0], piece_image.shape[1])
-            piece_image = cv2.resize(piece_image, (0, 0), fx=scale_factor, fy=scale_factor, interpolation=cv2.INTER_CUBIC)
-            cx = int(cx * scale_factor)
-            cy = int(cy * scale_factor)
-            print(f"Piece {idx+1}: Added padding and scaled to 500x500 for processing. New centroid: ({cx}, {cy})")
-
-            #disp_img = piece_image.copy()
-            #cv2.circle(disp_img, (cx, cy), 5, (127, 127, 127), -1)
-            #show_image(disp_img, str="Disp-Image - added border and scaled", max=1000, wait_for_key=True)
-
-            # Get the edges and lines, and find the rotation of the piece by finding the minimum bounding box of the lines. 
-            # This is a rough approximation but should be good enough for rotation estimation.
+            cx,cy = rot_center
 
             # Extract edges using Canny edge detection. This will give us a binary image where the edges
             # are white and the rest is black. We can then use this to find lines and estimate rotation.
@@ -128,10 +111,7 @@ def main():
 
             rotated_lines = [ rotate_line(line, (center_x, center_y), rotation_angle_rad) for line in lines ]
             # get top_left and bottom right bounding box of rotated lines.
-            tl_x = min([min(line[0][0], line[1][0]) for line in rotated_lines])
-            tl_y = min([min(line[0][1], line[1][1]) for line in rotated_lines])
-            br_x = max([max(line[0][0], line[1][0]) for line in rotated_lines])
-            br_y = max([max(line[0][1], line[1][1]) for line in rotated_lines])
+            (tl_x, tl_y), (br_x, br_y) = get_bounding_box_from_lines(rotated_lines)
 
             # draw bbox of lines on rotated image for debugging purposes
             cv2.rectangle(rotated_image, (int(tl_x), int(tl_y)), (int(br_x), int(br_y)), (255, 0, 0), 1)
@@ -146,12 +126,20 @@ def main():
             
             # Find the corners of the piece
             corners = find_corners(rotated_lines, (tl_x, tl_y), (br_x, br_y), end_to_end_dist_thresh=20, debug=args.debug)
-            for _, point, angle_rad in corners:
-                cv2.circle(rotated_image, (int(point[0]), int(point[1])), 10, (0, 0, int(255*angle_rad/(2*np.pi))), -1)
-            show_image(rotated_image, str=f"Corners {idx+1}", max=1000, wait_for_key=True)
+            # for _, point, angle_rad in corners:
+            #     cv2.circle(rotated_image, (int(point[0]), int(point[1])), 10, (0, 0, int(255*angle_rad/(2*np.pi))), -1)
+            # show_image(rotated_image, str=f"Corners {idx+1}", max=1000, wait_for_key=True)
             # print(f"Corners: {corners}")    
-        
-        cv2.waitKey(0)
+
+            # Also add corners to the original image.
+            for _, point, _ in corners:
+                unrotated_point = rotate_point(point, (center_x, center_y), -rotation_angle_rad)
+                pt_in_orig = inverse_transform_fn(map(int, unrotated_point))
+                cv2.circle(resized_image, (int(pt_in_orig[0]), int(pt_in_orig[1])), 10, (0, 0, 255), -1)
+
+            # add corners to the original resized image
+
+        show_image(resized_image, "Orig with corners.", max=1000, wait_for_key=True)
         cv2.destroyAllWindows()
     else:
         print("Piece Project Initialized")
