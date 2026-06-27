@@ -21,6 +21,7 @@ from find_corners import find_corners
 from get_piece_info import get_piece_info
 from fl_remove_background import fl_remove_background
 from fl_pad_and_scale import fl_pad_and_scale
+from find_tabs import find_tabs
 
 def main():
     parser = argparse.ArgumentParser(description="Piece Project CLI")
@@ -44,15 +45,8 @@ def main():
         # print(f"Loaded image from {args.picture} with original size {image.shape[1]}x{image.shape[0]}, resized to {resized_image.shape[1]}x{resized_image.shape[0]} for processing.")
         
         # Clean up image to make it easier to analyze a jigsaw piece.
-        cleaned_up = fl_remove_background(resized_image, debug=args.debug, image_type=args.type)
-        # show_image(cleaned_up, str="Background removed", max=1000, wait_for_key=True)
-        # exit(0)
-
-        # - Convert to grayscale
-        # - Blur to reduce noise
-        # - Threshold to get binary image
-        # - Morphological operations to close gaps
-        pre_processed_image = pre_process_image(cleaned_up, debug=args.debug)
+        pre_processed_image = fl_remove_background(resized_image, debug=args.debug, image_type=args.type)
+        show_image(pre_processed_image, str="Pre-processed", max=1000, wait_for_key=True)
 
         # Find the number of pieces in the image using the get_piece_info function
         pieces = get_piece_info(pre_processed_image)
@@ -124,11 +118,13 @@ def main():
             for (x1,y1), (x2,y2) in rotated_lines:
                 cv2.line(rotated_image, (int(x1), int(y1)), (int(x2), int(y2)), (80, 255, 80), 3)
             
+            tab_lines = find_tabs(rotated_lines, ((tl_x, tl_y), (br_x, br_y)))
+
             # Find the corners of the piece
-            corners = find_corners(rotated_lines, (tl_x, tl_y), (br_x, br_y), end_to_end_dist_thresh=20, debug=args.debug)
+            corners = find_corners(rotated_lines, (tl_x, tl_y), (br_x, br_y), tab_lines=tab_lines, end_to_end_dist_thresh=20, debug=args.debug)
             # for _, point, angle_rad in corners:
             #     cv2.circle(rotated_image, (int(point[0]), int(point[1])), 10, (0, 0, int(255*angle_rad/(2*np.pi))), -1)
-            # show_image(rotated_image, str=f"Corners {idx+1}", max=1000, wait_for_key=True)
+            show_image(rotated_image, str=f"Corners {idx+1}", max=1000, wait_for_key=True)
             # print(f"Corners: {corners}")    
 
             # Also add corners to the original image.
@@ -136,6 +132,12 @@ def main():
                 unrotated_point = rotate_point(point, (center_x, center_y), -rotation_angle_rad)
                 pt_in_orig = inverse_transform_fn(map(int, unrotated_point))
                 cv2.circle(resized_image, (int(pt_in_orig[0]), int(pt_in_orig[1])), 10, (0, 0, 255), -1)
+
+            # Also add tab points to original image
+            for line in tab_lines:
+                unrotated_line = rotate_line(line, (center_x, center_y), -rotation_angle_rad)
+                o_pts = [inverse_transform_fn(map(int, pt)) for pt in unrotated_line]
+                cv2.line(resized_image, (int(o_pts[0][0]), int(o_pts[0][1])), (int(o_pts[1][0]), int(o_pts[1][1])), (250, 0,0), 3)
 
             # add corners to the original resized image
 
