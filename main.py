@@ -64,7 +64,7 @@ def main():
 
         # for each piece, we want to find the edges and lines and corners.
         for idx, piece in enumerate(pieces):
-            # if idx != 8 : continue
+            # if idx != 2 : continue
             print(f"\nProcessing Piece {idx+1}: Bounding Box = {piece['box']}, Centroid = {piece['centroid']}, Area = {piece['area']}")
 
             # create a new image that is just the piece, by cropping the pre_processed_image using the 
@@ -88,7 +88,7 @@ def main():
                 print(f"Saved edge-detected image to {args.edges}")
                 return
 
-            rotation_angle_rad, center_x, center_y, lines = find_rotation(edges, cx, cy)
+            rotation_angle_rad, center_x, center_y, lines = find_rotation(edges, cx, cy, debug=args.debug)
             rotation_angle = np.degrees(rotation_angle_rad)
 
             # rotate the image around the point center_x, center_y by the rotation angle
@@ -139,7 +139,9 @@ def main():
                 o_pts = [inverse_transform_fn(map(int, pt)) for pt in unrotated_line]
                 cv2.line(resized_image, (int(o_pts[0][0]), int(o_pts[0][1])), (int(o_pts[1][0]), int(o_pts[1][1])), (250, 0,0), 3)
 
-            # add corners to the original resized image
+            # Put number on piece
+            cv2.putText(resized_image, f"{idx}", piece['centroid'], cv2.FONT_HERSHEY_SIMPLEX, 3.0, (100, 100, 100), 3)
+
 
         show_image(resized_image, "Orig with corners.", max=1000, wait_for_key=True)
         cv2.destroyAllWindows()
