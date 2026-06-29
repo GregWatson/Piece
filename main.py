@@ -22,6 +22,7 @@ from get_piece_info import get_piece_info
 from fl_remove_background import fl_remove_background
 from fl_pad_and_scale import fl_pad_and_scale
 from find_tabs import find_tabs
+from find_blanks import find_blank_lines
 
 def main():
     parser = argparse.ArgumentParser(description="Piece Project CLI")
@@ -119,12 +120,13 @@ def main():
                 cv2.line(rotated_image, (int(x1), int(y1)), (int(x2), int(y2)), (80, 255, 80), 3)
             
             tab_lines = find_tabs(rotated_lines, ((tl_x, tl_y), (br_x, br_y)))
+            blank_lines = find_blank_lines(rotated_lines, ((tl_x, tl_y), (br_x, br_y)), (cx,cy))
 
             # Find the corners of the piece
             corners = find_corners(rotated_lines, (tl_x, tl_y), (br_x, br_y), tab_lines=tab_lines, end_to_end_dist_thresh=20, debug=args.debug)
             # for _, point, angle_rad in corners:
             #     cv2.circle(rotated_image, (int(point[0]), int(point[1])), 10, (0, 0, int(255*angle_rad/(2*np.pi))), -1)
-            show_image(rotated_image, str=f"Corners {idx+1}", max=1000, wait_for_key=True)
+            # show_image(rotated_image, str=f"Corners {idx+1}", max=1000, wait_for_key=True)
             # print(f"Corners: {corners}")    
 
             # Also add corners to the original image.
@@ -137,11 +139,19 @@ def main():
             for line in tab_lines:
                 unrotated_line = rotate_line(line, (center_x, center_y), -rotation_angle_rad)
                 o_pts = [inverse_transform_fn(map(int, pt)) for pt in unrotated_line]
-                cv2.line(resized_image, (int(o_pts[0][0]), int(o_pts[0][1])), (int(o_pts[1][0]), int(o_pts[1][1])), (250, 0,0), 3)
+                cv2.line(resized_image, (int(o_pts[0][0]), int(o_pts[0][1])), (int(o_pts[1][0]), int(o_pts[1][1])), (250, 0,0), 4)
+
+            # Also add blank lines to original image
+            for line in blank_lines:
+                unrotated_line = rotate_line(line, (center_x, center_y), -rotation_angle_rad)
+                o_pts = [inverse_transform_fn(map(int, pt)) for pt in unrotated_line]
+                cv2.line(resized_image, (int(o_pts[0][0]), int(o_pts[0][1])), (int(o_pts[1][0]), int(o_pts[1][1])), (250, 0, 200), 5)
 
             # Put number on piece
-            cv2.putText(resized_image, f"{idx}", piece['centroid'], cv2.FONT_HERSHEY_SIMPLEX, 3.0, (100, 100, 100), 3)
+            cv2.putText(resized_image, f"{idx}", (piece['centroid'][0] - 20, piece['centroid'][1] + 20) , cv2.FONT_HERSHEY_SIMPLEX, 3.0, (100, 100, 100), 3)
 
+            # Show centroid
+            cv2.circle(resized_image, (int(piece['centroid'][0]), int(piece['centroid'][1])), 5, (200,30,30), 6)
 
         show_image(resized_image, "Orig with corners.", max=1000, wait_for_key=True)
         cv2.destroyAllWindows()
