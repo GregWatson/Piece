@@ -65,7 +65,7 @@ def main():
 
         # for each piece, we want to find the edges and lines and corners.
         for idx, piece in enumerate(pieces):
-            # if idx != 2 : continue
+            # if idx != 23 : continue
             print(f"\nProcessing Piece {idx+1}: Bounding Box = {piece['box']}, Centroid = {piece['centroid']}, Area = {piece['area']}")
 
             # create a new image that is just the piece, by cropping the pre_processed_image using the 
@@ -89,11 +89,11 @@ def main():
                 print(f"Saved edge-detected image to {args.edges}")
                 return
 
-            rotation_angle_rad, center_x, center_y, lines = find_rotation(edges, cx, cy, debug=args.debug)
+            rotation_angle_rad, lines = find_rotation(edges, cx, cy, debug=args.debug)
             rotation_angle = np.degrees(rotation_angle_rad)
 
-            # rotate the image around the point center_x, center_y by the rotation angle
-            rotation_matrix = cv2.getRotationMatrix2D((center_x, center_y), rotation_angle, 1.0)
+            # rotate the image around the point cx, cy by the rotation angle
+            rotation_matrix = cv2.getRotationMatrix2D((cx, cy), rotation_angle, 1.0)
             rotated_image_grey = cv2.warpAffine(piece_image, rotation_matrix, (500, 500))
             rotated_image = cv2.cvtColor(rotated_image_grey, cv2.COLOR_GRAY2BGR)
             w, h = rotated_image_grey.shape[1], rotated_image_grey.shape[0]
@@ -104,7 +104,7 @@ def main():
             # which will be useful for further processing steps like matching pieces together.
             # We can also draw the lines we found on the rotated image for debugging purposes
 
-            rotated_lines = [ rotate_line(line, (center_x, center_y), rotation_angle_rad) for line in lines ]
+            rotated_lines = [ rotate_line(line, (cx, cy), rotation_angle_rad) for line in lines ]
             # get top_left and bottom right bounding box of rotated lines.
             (tl_x, tl_y), (br_x, br_y) = get_bounding_box_from_lines(rotated_lines)
 
@@ -131,19 +131,19 @@ def main():
 
             # Also add corners to the original image.
             for _, point, _ in corners:
-                unrotated_point = rotate_point(point, (center_x, center_y), -rotation_angle_rad)
+                unrotated_point = rotate_point(point, (cx, cy), -rotation_angle_rad)
                 pt_in_orig = inverse_transform_fn(map(int, unrotated_point))
                 cv2.circle(resized_image, (int(pt_in_orig[0]), int(pt_in_orig[1])), 10, (0, 0, 255), -1)
 
             # Also add tab points to original image
             for line in tab_lines:
-                unrotated_line = rotate_line(line, (center_x, center_y), -rotation_angle_rad)
+                unrotated_line = rotate_line(line, (cx, cy), -rotation_angle_rad)
                 o_pts = [inverse_transform_fn(map(int, pt)) for pt in unrotated_line]
                 cv2.line(resized_image, (int(o_pts[0][0]), int(o_pts[0][1])), (int(o_pts[1][0]), int(o_pts[1][1])), (250, 0,0), 4)
 
-            # Also add blank lines to original image
+            # Also add blanks to original image
             for line in blank_lines:
-                unrotated_line = rotate_line(line, (center_x, center_y), -rotation_angle_rad)
+                unrotated_line = rotate_line(line, (cx, cy), -rotation_angle_rad)
                 o_pts = [inverse_transform_fn(map(int, pt)) for pt in unrotated_line]
                 cv2.line(resized_image, (int(o_pts[0][0]), int(o_pts[0][1])), (int(o_pts[1][0]), int(o_pts[1][1])), (250, 0, 200), 5)
 
