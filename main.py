@@ -66,7 +66,7 @@ def main():
 
         # for each piece, we want to find the edges and lines and corners.
         for idx, piece in enumerate(pieces):
-            # if idx != 23 : continue
+            if idx != 3 : continue
             print(f"\nProcessing Piece {idx+1}: Bounding Box = {piece['box']}, Centroid = {piece['centroid']}, Area = {piece['area']}")
 
             # create a new image that is just the piece, by cropping the pre_processed_image using the 
@@ -126,7 +126,7 @@ def main():
             blank_lines = find_blank_lines(rotated_lines, ((tl_x, tl_y), (br_x, br_y)), (cx,cy))
 
             # Find the corners of the piece
-            corners = find_corners(rotated_lines, (tl_x, tl_y), (br_x, br_y), tab_lines=tab_lines, end_to_end_dist_thresh=20, debug=args.debug)
+            corners = find_corners(rotated_lines, (tl_x, tl_y), (br_x, br_y), tab_lines=tab_lines, blank_lines=blank_lines, end_to_end_dist_thresh=20, debug=args.debug)
             # for _, point, angle_rad in corners:
             #     cv2.circle(rotated_image, (int(point[0]), int(point[1])), 10, (0, 0, int(255*angle_rad/(2*np.pi))), -1)
             # show_image(rotated_image, str=f"Corners {idx+1}", max=1000, wait_for_key=True)
