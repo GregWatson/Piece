@@ -15,8 +15,10 @@ if module_path not in sys.path:
     sys.path.append(module_path)
     
 # from pre_proc_image import pre_process_image
+import fl_types as T
 from find_rotation import find_rotation
 from fl_core import rotate_line, show_image, get_bounding_box_from_lines, rotate_point, draw_poly
+from fl_core import rotate_and_transform_point, draw_triangle
 from find_corners import find_corners
 from get_piece_info import get_piece_info
 from fl_remove_background import fl_remove_background
@@ -30,6 +32,8 @@ def main():
     parser.add_argument("-e", "--edges", help="Convert image specified by -p to an image of just edges, and save it to specified file.", type=str)
     parser.add_argument("-d", "--debug", action="store_true", help="Enable debug mode with verbose output")
     args = parser.parse_args()
+
+    jigsaw = T.Jigsaw()
 
     if args.picture:
         image = cv2.imread(args.picture)
@@ -64,11 +68,11 @@ def main():
 
         # for each piece, we want to find the edges and lines and corners.
         for idx, piece in enumerate(pieces):
-            # if idx < 8 : continue
+            # if idx != 4 : continue
             print(f"\nProcessing Piece {idx+1}: Bounding Box = {piece['box']}, Centroid = {piece['centroid']}, Area = {piece['area']}")
 
             # create a new image that is just the piece, by cropping the pre_processed_image using the 
-            # bounding box of the piece.
+            # bounding box of the piece, and scale it up to somethign more useable.
             orig_x, orig_y, w, h = piece['box']
             cx, cy = piece['centroid']
             piece_image, _, rot_center, inverse_transform_fn = fl_pad_and_scale(pre_processed_image, 
@@ -88,6 +92,7 @@ def main():
                 print(f"Saved edge-detected image to {args.edges}")
                 return
 
+            # Analyse the image to see if it can 'straightened up' and if so by how much.
             rotation_angle_rad, lines = find_rotation(edges, cx, cy, debug=args.debug)
             rotation_angle = np.degrees(rotation_angle_rad)
 
@@ -96,8 +101,7 @@ def main():
             rotated_image_grey = cv2.warpAffine(piece_image, rotation_matrix, (500, 500))
             rotated_image = cv2.cvtColor(rotated_image_grey, cv2.COLOR_GRAY2BGR)
             w, h = rotated_image_grey.shape[1], rotated_image_grey.shape[0]
-            rotated_edges = edges.copy()
-            rotated_edges = cv2.warpAffine(rotated_edges, rotation_matrix, (w, h))
+            rotated_edges = cv2.warpAffine(edges.copy(), rotation_matrix, (w, h))
 
             # Rotate the lines we found as well for debugging purposes, and draw them on the rotated image. 
             # This will help us see if the rotation is correct and if the lines are aligned with the edges 
@@ -120,11 +124,9 @@ def main():
             for (x1,y1), (x2,y2) in rotated_lines:
                 cv2.line(rotated_image, (int(x1), int(y1)), (int(x2), int(y2)), (80, 255, 80), 3)
             
-            # tab_lines = find_tabs(rotated_lines, ((tl_x, tl_y), (br_x, br_y)))
-            # blank_lines = find_blank_lines(rotated_lines, ((tl_x, tl_y), (br_x, br_y)), (cx,cy))
-
             # Find the corners of the piece
             corners, blank_keep_outs, tab_keep_outs = find_corners(rotated_lines, (tl_x, tl_y), (br_x, br_y), end_to_end_dist_thresh=20, debug=args.debug)
+
             # for _, point, angle_rad in corners:
             #     cv2.circle(rotated_image, (int(point[0]), int(point[1])), 10, (0, 0, int(255*angle_rad/(2*np.pi))), -1)
             # show_image(rotated_image, str=f"Corners {idx+1}", max=1000, wait_for_key=True)
@@ -133,6 +135,15 @@ def main():
             # Get triangles formed by corners and the point furthest from the line between 2 corners.
             # Operate on rotated edge image.
             triangles = find_triangles_from_corners(rotated_edges, corners, debug=args.debug)
+
+            # display triangles on orig image
+            for tri in triangles:
+                orig_tri_pts = [ rotate_and_transform_point(pts3, (cx,cy), -rotation_angle_rad, inverse_transform_fn) for pts3 in tri ]
+                if len(tri) == 3:
+                    draw_triangle(resized_image, orig_tri_pts, color=(255,255,0), thickness=2)
+                else:
+                    assert len(tri)==2
+                    cv2.line(resized_image, (int(orig_tri_pts[0][0]), int(orig_tri_pts[0][1])), (int(orig_tri_pts[1][0]), int(orig_tri_pts[1][1])), color=(30,30,30), thickness=4)
 
             unrotated_corner_points = []
             for row in corners:
@@ -157,9 +168,8 @@ def main():
                 tr_bbox = (br_bbox[0], tl_bbox[1])
                 bl_bbox = (tl_bbox[0], br_bbox[1])
                 pts = [tl_bbox, br_bbox, tr_bbox, bl_bbox]
-                unrotated_pts = [ rotate_point(pt, (cx, cy), -rotation_angle_rad) for pt in pts ]
-                orig_pts = [ inverse_transform_fn(map(int, pt)) for pt in unrotated_pts ]
-                draw_poly(resized_image, orig_pts, (250, 0, 0), 4)
+                orig_pts = [ rotate_and_transform_point(pt, (cx,cy), -rotation_angle_rad, inverse_transform_fn) for pt in pts ]
+                draw_poly(resized_image, orig_pts, color=(250, 0, 0), thickness=4)
         
             # Put number on piece
             cv2.putText(resized_image, f"{idx}", (piece['centroid'][0] - 20, piece['centroid'][1] + 20) , cv2.FONT_HERSHEY_SIMPLEX, 3.0, (100, 100, 100), 5)
