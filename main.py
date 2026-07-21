@@ -13,7 +13,7 @@ if module_path not in sys.path:
     sys.path.append(module_path)
     
 # from pre_proc_image import pre_process_image
-import fl_types as T
+from fl_types import P_Info, J_Piece
 from find_rotation import find_rotation
 from fl_core import rotate_line, show_image, get_bounding_box_from_lines, rotate_point, draw_poly
 from fl_core import rotate_and_transform_point, draw_triangle
@@ -51,7 +51,7 @@ def main():
 
         # Find basic info on each piece in the image using the get_piece_info function.
         piece_info = get_piece_info(pre_processed_image)
-        pieces: list [ T:J_Piece ] = [ T.J_Piece(info=info) for info in piece_info ]
+        pieces = [ J_Piece(info=info) for info in piece_info ]
 
         print(f"Detected {len(pieces)} piece(s) in the image.")
 
@@ -69,17 +69,17 @@ def main():
         for idx, piece in enumerate(pieces):
             #if idx != 2 : continue
             info = piece.info
-            print(f"\nProcessing Piece {idx+1}: Bounding Box = {info['box']}, Centroid = {info['centroid']}, Area = {info['area']}")
+            print(f"\nProcessing Piece number {info.id+1} (ID is {info.id} ): Bounding Box = {info.box}, Centroid = {info.centroid}, Area = {info.area}")
 
             # create a new image that is just the piece, by cropping the pre_processed_image using the 
             # bounding box of the piece, and scale it up to something more useable. Also add padding around 
             # the piece so it can be rotated around centroid without losing any pixels.
 
-            orig_x, orig_y, w, h = info['box']
-            cx, cy = info['centroid']
+            orig_x, orig_y, w, h = info.box
+            cx, cy = info.centroid
             piece_image, _, rot_center, inverse_transform_fn = fl_pad_and_scale(pre_processed_image, 
                                                                                 [[(orig_x,orig_y), (orig_x+w, orig_y+h)]],
-                                                                                info['centroid'],
+                                                                                info.centroid,
                                                                                 new_img_size = 500, 
                                                                                 debug=args.debug)
             piece.orig['user_image'] = piece_image
@@ -121,6 +121,9 @@ def main():
 
             # Find the corners of the piece
             corners, blank_keep_outs, tab_keep_outs = find_corners(rotated_lines, (tl_x, tl_y), (br_x, br_y), end_to_end_dist_thresh=20, debug=args.debug)
+            if not len(corners):
+                print(f"!!!! Piece {idx}: No corners found. Skipping.")
+                continue
 
             if args.debug:
                 # draw bbox of lines on rotated image for debugging purposes
@@ -133,11 +136,12 @@ def main():
                 # Show rotated lines
                 for (x1,y1), (x2,y2) in rotated_lines:
                     cv2.line(rotated_image, (int(x1), int(y1)), (int(x2), int(y2)), (80, 255, 80), 3)
-            
-                for _, point, angle_rad in corners:
+
+                # Corners is list of lists [rows][cols]. 4 elements
+                for corner_point in [ col for row in corners for col in row if col]:
+                    _, point, angle_rad = corner_point
                     cv2.circle(rotated_image, (int(point[0]), int(point[1])), 10, (0, 0, int(255*angle_rad/(2*np.pi))), -1)
                 show_image(rotated_image, str=f"Corners {idx+1}", max=1000, wait_for_key=True)
-                print(f"Corners: {corners}")
 
             # Get triangles formed by corners and the point furthest from the line between 2 corners.
             # Operate on rotated edge image.
@@ -179,10 +183,10 @@ def main():
                 draw_poly(resized_image, orig_pts, color=(250, 0, 0), thickness=4)
         
             # Put number on piece
-            cv2.putText(resized_image, f"{idx}", (info['centroid'][0] - 20, info['centroid'][1] + 20) , cv2.FONT_HERSHEY_SIMPLEX, 3.0, (100, 100, 100), 5)
+            cv2.putText(resized_image, f"{idx}", (info.centroid[0] - 20, info.centroid[1] + 20) , cv2.FONT_HERSHEY_SIMPLEX, 3.0, (100, 100, 100), 5)
 
             # Show centroid
-            cv2.circle(resized_image, (int(info['centroid'][0]), int(info['centroid'][1])), 5, (200,30,30), 6)
+            cv2.circle(resized_image, info.centroid, 5, (200,30,30), 6)
 
         show_image(resized_image, "Orig with corners.", max=1000, wait_for_key=True)
         cv2.destroyAllWindows()
