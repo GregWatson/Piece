@@ -13,7 +13,7 @@ if module_path not in sys.path:
     sys.path.append(module_path)
     
 # from pre_proc_image import pre_process_image
-from fl_types import P_Info, J_Piece
+from fl_types import J_Piece
 from find_rotation import find_rotation
 from fl_core import rotate_line, show_image, get_bounding_box_from_lines, rotate_point, draw_poly
 from fl_core import rotate_and_transform_point, draw_triangle
@@ -145,15 +145,19 @@ def main():
 
             # Get triangles formed by corners and the point furthest from the line between 2 corners.
             # Operate on rotated edge image.
-            triangles = find_triangles_from_corners(rotated_edges, corners, debug=args.debug)
+            triangles, edge_types = find_triangles_from_corners(rotated_edges, corners, debug=args.debug)
+            print(f"Edge types: {edge_types}")
+            for tri, etype in zip(triangles, edge_types):
+                piece.info.sides.append(etype)
+                piece.rot['triangles'].append(tri)
 
             # display triangles on orig image
-            for tri in triangles:
-                orig_tri_pts = [ rotate_and_transform_point(pts3, (cx,cy), -rotation_angle_rad, inverse_transform_fn) for pts3 in tri ]
-                if len(tri) == 3:
+            for p_tri in triangles:
+                orig_tri_pts = [ rotate_and_transform_point(pts3, (cx,cy), -rotation_angle_rad, inverse_transform_fn) for pts3 in p_tri.points ]
+                if len(p_tri.points) == 3:
                     draw_triangle(resized_image, orig_tri_pts, color=(255,255,0), thickness=2)
                 else:
-                    assert len(tri)==2
+                    assert len(p_tri.points)==2
                     cv2.line(resized_image, (int(orig_tri_pts[0][0]), int(orig_tri_pts[0][1])), (int(orig_tri_pts[1][0]), int(orig_tri_pts[1][1])), color=(30,30,30), thickness=4)
 
             unrotated_corner_points = []
