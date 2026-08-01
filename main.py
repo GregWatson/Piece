@@ -13,7 +13,7 @@ if module_path not in sys.path:
     sys.path.append(module_path)
     
 # from pre_proc_image import pre_process_image
-from fl_types import J_Piece
+from fl_types import J_Piece, P_Info
 from find_rotation import find_rotation
 from fl_core import rotate_line, show_image, get_bounding_box_from_lines, rotate_point, draw_poly
 from fl_core import rotate_and_transform_point, draw_triangle
@@ -22,6 +22,7 @@ from get_piece_info import get_piece_info
 from fl_remove_background import fl_remove_background
 from fl_pad_and_scale import fl_pad_and_scale
 from find_triangles import find_triangles_from_corners
+from process_piece import process_piece
 
 def main():
     parser = argparse.ArgumentParser(description="Piece Project CLI")
@@ -50,7 +51,7 @@ def main():
         show_image(pre_processed_image, str="Pre-processed", max=1000, wait_for_key=True)
 
         # Find basic info on each piece in the image using the get_piece_info function.
-        piece_info = get_piece_info(pre_processed_image)
+        piece_info: list [P_Info] = get_piece_info(pre_processed_image)
         pieces = [ J_Piece(info=info) for info in piece_info ]
 
         print(f"Detected {len(pieces)} piece(s) in the image.")
@@ -66,90 +67,25 @@ def main():
 
 
         # for each piece, we want to find the edges and lines and corners.
-        for idx, piece in enumerate(pieces):
-            #if idx != 2 : continue
+        for piece in pieces:
             info = piece.info
+            idx = info.id
+            #if idx != 2 : continue
+
             print(f"\nProcessing Piece number {info.id+1} (ID is {info.id} ): Bounding Box = {info.box}, Centroid = {info.centroid}, Area = {info.area}")
 
-            # create a new image that is just the piece, by cropping the pre_processed_image using the 
-            # bounding box of the piece, and scale it up to something more useable. Also add padding around 
-            # the piece so it can be rotated around centroid without losing any pixels.
+            ok = process_piece(piece, pre_processed_image, debug=args.debug)
+            if not ok:
+                print(f"Processing of piece {info.id} failed. Skipping this piece.")
 
-            orig_x, orig_y, w, h = info.box
-            cx, cy = info.centroid
-            piece_image, _, rot_center, inverse_transform_fn = fl_pad_and_scale(pre_processed_image, 
-                                                                                [[(orig_x,orig_y), (orig_x+w, orig_y+h)]],
-                                                                                info.centroid,
-                                                                                new_img_size = 500, 
-                                                                                debug=args.debug)
-            piece.orig['user_image'] = piece_image
-
-            cx,cy = rot_center
-
-            # Extract edges using Canny edge detection. This will give us a binary image where the edges
-            # are white and the rest is black. We can then use this to find lines and estimate rotation.
-            edges = cv2.Canny(piece_image, 50, 150, apertureSize=3)
-
-            # HEY! maybe this is a good place to see how Canny edge detection result compares
-            # to the contour returned in info???
-
-            if args.edges:
-                cv2.imwrite(args.edges, edges)
-                print(f"Saved edge-detected image to {args.edges}")
-                return
-
-            # Analyse the image to see if it can be 'straightened up' and if so by how much.
-            rotation_angle_rad, lines = find_rotation(edges, cx, cy, debug=args.debug)
-            rotation_angle = np.degrees(rotation_angle_rad)
-
-            # rotate the image around the point cx, cy by the rotation angle
-            rotation_matrix = cv2.getRotationMatrix2D((cx, cy), rotation_angle, 1.0)
-            rotated_image_grey = cv2.warpAffine(piece_image, rotation_matrix, (500, 500))
-            rotated_image = cv2.cvtColor(rotated_image_grey, cv2.COLOR_GRAY2BGR)
-            piece.rot['edges_image_grey'] = rotated_image_grey
-            piece.rot['img_w'], piece.rot['img_h'] = rotated_image_grey.shape[1], rotated_image_grey.shape[0]
-            rotated_edges = cv2.warpAffine(edges.copy(), rotation_matrix, (piece.rot['img_w'], piece.rot['img_h']))
-
-            # Rotate the lines we found as well for debugging purposes, and draw them on the rotated image. 
-            # This will help us see if the rotation is correct and if the lines are aligned with the edges 
-            # of the piece after rotation. We can also use this to find the corners of the piece after rotation, 
-            # which will be useful for further processing steps like matching pieces together.
-
-            rotated_lines = [ rotate_line(line, (cx, cy), rotation_angle_rad) for line in lines ]
-            # get top_left and bottom right bounding box of rotated lines.
-            (tl_x, tl_y), (br_x, br_y) = get_bounding_box_from_lines(rotated_lines)
-
-            # Find the corners of the piece
-            corners, blank_keep_outs, tab_keep_outs = find_corners(rotated_lines, (tl_x, tl_y), (br_x, br_y), end_to_end_dist_thresh=20, debug=args.debug)
-            if not len(corners):
-                print(f"!!!! Piece {idx}: No corners found. Skipping.")
-                continue
-
-            if args.debug:
-                # draw bbox of lines on rotated image for debugging purposes
-                cv2.rectangle(rotated_image, (int(tl_x), int(tl_y)), (int(br_x), int(br_y)), (255, 0, 0), 1)
-
-                # Show UN-rotated lines
-                for (x1, y1), (x2, y2) in lines:
-                    cv2.line(rotated_image, (x1, y1), (x2, y2), (25, 155, 145), 1)
-
-                # Show rotated lines
-                for (x1,y1), (x2,y2) in rotated_lines:
-                    cv2.line(rotated_image, (int(x1), int(y1)), (int(x2), int(y2)), (80, 255, 80), 3)
-
-                # Corners is list of lists [rows][cols]. 4 elements
-                for corner_point in [ col for row in corners for col in row if col]:
-                    _, point, angle_rad = corner_point
-                    cv2.circle(rotated_image, (int(point[0]), int(point[1])), 10, (0, 0, int(255*angle_rad/(2*np.pi))), -1)
-                show_image(rotated_image, str=f"Corners {idx+1}", max=1000, wait_for_key=True)
-
-            # Get triangles formed by corners and the point furthest from the line between 2 corners.
-            # Operate on rotated edge image.
-            triangles, edge_types = find_triangles_from_corners(rotated_edges, corners, debug=args.debug)
-            print(f"Edge types: {edge_types}")
-            for tri, etype in zip(triangles, edge_types):
-                piece.info.sides.append(etype)
-                piece.rot['triangles'].append(tri)
+            triangles = piece.rot['triangles']
+            rotation_angle_rad = piece.rot['rotation_angle_rad']
+            inverse_transform_fn = piece.orig['inverse_transform_fn']
+            cx,cy = piece.orig['rot_center']
+            corners = piece.rot['corners']
+            tab_keep_outs = piece.rot['tab_keep_outs']
+            blank_keep_outs = piece.rot['blank_keep_outs']
+            corners = piece.rot['corners']
 
             # display triangles on orig image
             for p_tri in triangles:
