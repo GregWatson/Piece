@@ -23,6 +23,7 @@ from fl_remove_background import fl_remove_background
 from fl_pad_and_scale import fl_pad_and_scale
 from find_triangles import find_triangles_from_corners
 from process_piece import process_piece
+from solve_puzzle import solve_puzzle
 
 def main():
     parser = argparse.ArgumentParser(description="Piece Project CLI")
@@ -70,9 +71,12 @@ def main():
         for piece in pieces:
             info = piece.info
             idx = info.id
-            #if idx != 2 : continue
+            if idx != 1: continue
 
             print(f"\nProcessing Piece number {info.id+1} (ID is {info.id} ): Bounding Box = {info.box}, Centroid = {info.centroid}, Area = {info.area}")
+
+            # process_piece does the heavy lifting to analyze each piece and extract import information
+            # such as edge types, lines, and corner points.
 
             ok = process_piece(piece, pre_processed_image, debug=args.debug)
             if not ok:
@@ -129,6 +133,9 @@ def main():
             cv2.circle(resized_image, info.centroid, 5, (200,30,30), 6)
 
         show_image(resized_image, "Orig with corners.", max=1000, wait_for_key=True)
+
+        res = solve_puzzle(pieces)
+        cv2.waitKey(0)
         cv2.destroyAllWindows()
     else:
         print("Piece Project Initialized")
