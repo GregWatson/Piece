@@ -71,7 +71,7 @@ def main():
         for piece in pieces:
             info = piece.info
             idx = info.id
-            if idx != 1: continue
+            # if idx != 1: continue
 
             print(f"\nProcessing Piece number {info.id+1} (ID is {info.id} ): Bounding Box = {info.box}, Centroid = {info.centroid}, Area = {info.area}")
 
