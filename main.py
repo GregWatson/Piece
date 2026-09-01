@@ -3,6 +3,8 @@ import numpy as np
 import argparse
 import sys
 import os
+import re
+
 
 # Get the absolute path to the directory containing the module
 module_path = os.path.abspath("../FL_lib")
@@ -13,7 +15,7 @@ if module_path not in sys.path:
     sys.path.append(module_path)
     
 # from pre_proc_image import pre_process_image
-from fl_types import J_Piece, P_Info
+from fl_types import J_Piece, P_Info, Jigsaw
 from find_rotation import find_rotation
 from fl_core import rotate_line, show_image, get_bounding_box_from_lines, rotate_point, draw_poly
 from fl_core import rotate_and_transform_point, draw_triangle
@@ -31,6 +33,8 @@ def main():
     parser.add_argument("-t", "--type", help="Type of image: normal = one or more jigsaw pieces. reverse = the reverse side of the pieces (typically blank). Default is normal", choices=["normal", "reverse"], default="normal")
     parser.add_argument("-e", "--edges", help="Convert image specified by -p to an image of just edges, and save it to specified file.", type=str)
     parser.add_argument("-d", "--debug", action="store_true", help="Enable debug mode with verbose output")
+    parser.add_argument("-s", "--size", help="Specify jigsaw size in pieces: WxH. Default 6x6", type=str, default='6x6')
+
     args = parser.parse_args()
 
     
@@ -42,14 +46,14 @@ def main():
         
         # if the image is less than 500 x 500 then enlarge it to 500 x 500 for better processing. 
         # We can use cv2.resize for this, and we can use interpolation to maintain quality. This will help us ensure that the line detection and rotation estimation works well even for smaller images.
-        # scale_factor = max(1.0, 500.0 / max(image.shape[0], image.shape[1]))
-        resized_image = image.copy()
-        # resized_image = cv2.resize(image, (0, 0), fx=scale_factor, fy=scale_factor, interpolation=cv2.INTER_CUBIC)
-        # print(f"Loaded image from {args.picture} with original size {image.shape[1]}x{image.shape[0]}, resized to {resized_image.shape[1]}x{resized_image.shape[0]} for processing.")
+        scale_factor = max(1.0, 2000.0 / max(image.shape[0], image.shape[1]))
+        #resized_image = image.copy()
+        resized_image = cv2.resize(image, (0, 0), fx=scale_factor, fy=scale_factor, interpolation=cv2.INTER_CUBIC)
+        print(f"Loaded image from {args.picture} with original size {image.shape[1]}x{image.shape[0]}, resized to {resized_image.shape[1]}x{resized_image.shape[0]} for processing.")
         
         # Clean up image to make it easier to analyze a jigsaw piece.
         pre_processed_image = fl_remove_background(resized_image, debug=args.debug, image_type=args.type)
-        show_image(pre_processed_image, str="Pre-processed", max=1000, wait_for_key=True)
+        show_image(pre_processed_image, str="Pre-processed", max_side=1000, wait_for_key=True)
 
         # Find basic info on each piece in the image using the get_piece_info function.
         piece_info: list [P_Info] = get_piece_info(pre_processed_image)
@@ -64,7 +68,7 @@ def main():
         #     x,y,w,h = piece['box']
         #     cv2.rectangle(pieces_img, (x,y), (x+w, y+h), (127,127,127),2)
         #     cv2.circle(pieces_img, (int(piece['centroid'][0]), int(piece['centroid'][1])), 5, (127,127,127), -1)
-        # show_image(pieces_img, str="Pre-processed Image with bbox and centroids", max=1000, wait_for_key=True)
+        # show_image(pieces_img, str="Pre-processed Image with bbox and centroids", max_side=1000, wait_for_key=True)
 
 
         # for each piece, we want to find the edges and lines and corners.
@@ -132,9 +136,19 @@ def main():
             # Show centroid
             cv2.circle(resized_image, info.centroid, 5, (200,30,30), 6)
 
-        show_image(resized_image, "Orig with corners.", max=1000, wait_for_key=True)
+        show_image(resized_image, "Orig with corners.", max_side=2000, wait_for_key=True)
 
-        res = solve_puzzle(pieces)
+        jigsaw = Jigsaw()
+        jigsaw.unplaced = pieces
+
+        size_r = re.split(r'x', args.size, maxsplit=1, flags=re.IGNORECASE)
+        if size_r: # size_r[0] is width, size_r[1] is height
+            jigsaw.set_dim(int(size_r[0]), int(size_r[1]))
+        else:
+            print("Error - jigsaw dimensions must be set using -s WxH.")
+            exit(1)
+        res = solve_puzzle(jigsaw)
+
         cv2.waitKey(0)
         cv2.destroyAllWindows()
     else:
