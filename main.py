@@ -131,7 +131,7 @@ def main():
                 draw_poly(resized_image, orig_pts, color=(250, 0, 0), thickness=4)
         
             # Put number on piece
-            cv2.putText(resized_image, f"{idx}", (info.centroid[0] - 20, info.centroid[1] + 20) , cv2.FONT_HERSHEY_SIMPLEX, 3.0, (100, 100, 100), 5)
+            cv2.putText(resized_image, f"{idx}", (info.centroid[0] - 20, info.centroid[1] + 20) , cv2.FONT_HERSHEY_SIMPLEX, 3.0, (50, 50, 50), 5)
 
             # Show centroid
             cv2.circle(resized_image, info.centroid, 5, (200,30,30), 6)
